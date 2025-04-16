@@ -91,6 +91,24 @@ header p {
   background-color: #2980b9;
 }
 
+.connection-status {
+  background-color: #ecf0f1;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+#my-id-display,
+#connection-info {
+  margin-bottom: 5px;
+}
+
+#my-id,
+#connection-state {
+  font-weight: bold;
+}
+
 .walkie-talkie {
   background-color: #34495e;
   border-radius: 12px;
@@ -223,6 +241,7 @@ header p {
   background-color: #f9f9f9;
   border-radius: 8px;
   padding: 15px;
+  margin-bottom: 20px;
 }
 
 .participants h2 {
@@ -254,6 +273,42 @@ header p {
 .participants li.talking::before {
   content: "🔊 ";
   margin-right: 5px;
+}
+
+.connect-peer {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.connect-peer h3 {
+  font-size: 1rem;
+  margin-bottom: 10px;
+  color: #34495e;
+}
+
+.debug-log {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.debug-log h3 {
+  font-size: 1rem;
+  margin-bottom: 10px;
+  color: #34495e;
+}
+
+.log-container {
+  background-color: #2c3e50;
+  color: #ecf0f1;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  height: 100px;
+  overflow-y: auto;
 }
 
 @media (max-width: 480px) {

@@ -9,7 +9,11 @@ const participantsList = document.getElementById("participants-list")
 const usernameInput = document.getElementById("username")
 const editUsernameBtn = document.getElementById("edit-username")
 const roomIdInput = document.getElementById("room-id")
-const joinRoomBtn = document.getElementById("join-room")
+const myIdDisplay = document.getElementById("my-id")
+const connectionState = document.getElementById("connection-state")
+const peerIdInput = document.getElementById("peer-id")
+const connectToPeerBtn = document.getElementById("connect-to-peer")
+const logContainer = document.getElementById("log-container")
 
 // Audio elements for radio sound effects
 const startToneAudio = new Audio()
@@ -27,9 +31,17 @@ let peer = null
 let connections = {}
 let localStream = null
 let username = "Usuario"
-let roomId = "corazones-abiertos"
+const roomId = "corazones-abiertos"
 let isConnected = false
 let isTalking = false
+
+// Add log message
+function addLog(message) {
+  const logEntry = document.createElement("div")
+  logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`
+  logContainer.appendChild(logEntry)
+  logContainer.scrollTop = logContainer.scrollHeight
+}
 
 // Set initial volume
 volumeControl.addEventListener("input", () => {
@@ -58,28 +70,41 @@ editUsernameBtn.addEventListener("click", () => {
       })
     }
 
-    alert(`Nombre cambiado a: ${username}`)
+    addLog(`Nombre cambiado a: ${username}`)
   }
 })
 
 // Room joining
-joinRoomBtn.addEventListener("click", () => {
-  const newRoomId = roomIdInput.value.trim()
-  if (newRoomId && newRoomId !== roomId) {
-    // If already connected, disconnect first
-    if (isConnected) {
-      disconnectCall()
-      isConnected = false
-      connectBtn.textContent = "Conectar"
-      statusEl.textContent = "Desconectado"
-      statusEl.className = "status disconnected"
-    }
+// joinRoomBtn.addEventListener("click", () => {
+//   const newRoomId = roomIdInput.value.trim()
+//   if (newRoomId && newRoomId !== roomId) {
+//     // If already connected, disconnect first
+//     if (isConnected) {
+//       disconnectCall()
+//       isConnected = false
+//       connectBtn.textContent = "Conectar"
+//       statusEl.textContent = "Desconectado"
+//       statusEl.className = "status disconnected"
+//     }
 
-    roomId = newRoomId
-    localStorage.setItem("walkie-talkie-room", roomId)
-    channelDisplay.textContent = `Canal: ${roomId}`
+//     roomId = newRoomId
+//     localStorage.setItem("walkie-talkie-room", roomId)
+//     channelDisplay.textContent = `Canal: ${roomId}`
 
-    alert(`Te has unido al canal: ${roomId}`)
+//     alert(`Te has unido al canal: ${roomId}`)
+//   }
+// })
+
+// Connect to specific peer
+connectToPeerBtn.addEventListener("click", () => {
+  const peerId = peerIdInput.value.trim()
+  if (peerId && isConnected) {
+    addLog(`Intentando conectar con: ${peerId}`)
+    connectToPeer(peerId)
+  } else if (!isConnected) {
+    alert("Primero debes conectarte haciendo clic en 'Conectar'")
+  } else {
+    alert("Por favor ingresa un ID válido")
   }
 })
 
@@ -92,6 +117,7 @@ connectBtn.addEventListener("click", async () => {
       connectBtn.textContent = "Desconectar"
       statusEl.textContent = "Conectado"
       statusEl.className = "status connected"
+      connectionState.textContent = "Conectado"
       talkBtn.disabled = false
 
       // Add self to participants list
@@ -100,6 +126,8 @@ connectBtn.addEventListener("click", async () => {
       console.error("Error connecting:", error)
       statusEl.textContent = "Error al conectar"
       statusEl.className = "status disconnected"
+      connectionState.textContent = "Error: " + error.message
+      addLog(`Error de conexión: ${error.message}`)
     }
   } else {
     disconnectCall()
@@ -107,7 +135,9 @@ connectBtn.addEventListener("click", async () => {
     connectBtn.textContent = "Conectar"
     statusEl.textContent = "Desconectado"
     statusEl.className = "status disconnected"
+    connectionState.textContent = "Desconectado"
     talkBtn.disabled = true
+    myIdDisplay.textContent = "No conectado"
 
     // Clear participants list
     participantsList.innerHTML = ""
@@ -150,6 +180,8 @@ function startTalking(e) {
 
   // Start sending audio to all peers
   startAudioBroadcast()
+
+  addLog("Transmitiendo audio...")
 }
 
 // Stop talking function
@@ -176,12 +208,15 @@ function stopTalking(e) {
 
   // Stop sending audio
   stopAudioBroadcast()
+
+  addLog("Transmisión finalizada")
 }
 
 // Setup WebRTC connection
 async function setupConnection() {
   statusEl.textContent = "Conectando..."
   statusEl.className = "status connecting"
+  connectionState.textContent = "Conectando..."
 
   try {
     // Get user media (microphone)
@@ -190,30 +225,36 @@ async function setupConnection() {
       video: false,
     })
 
-    // Initialize PeerJS
-    const peerId = `${roomId}-${generateRandomId()}`
-    peer = new Peer(peerId)
+    addLog("Micrófono conectado correctamente")
+
+    // Initialize PeerJS - using a random ID
+    const peerId = generateRandomId()
+    peer = new Peer(peerId, {
+      debug: 2, // Log level
+    })
 
     return new Promise((resolve, reject) => {
       peer.on("open", (id) => {
         console.log("My peer ID is: " + id)
+        myIdDisplay.textContent = id
+        addLog(`Conectado con ID: ${id}`)
+        channelDisplay.textContent = `Canal: ${roomIdInput.value}`
 
         // Set up event listeners for peer connections
         setupPeerEventListeners()
-
-        // Join the room
-        joinRoom(roomId)
 
         resolve()
       })
 
       peer.on("error", (err) => {
         console.error("Peer connection error:", err)
+        addLog(`Error de PeerJS: ${err.type}`)
         reject(err)
       })
     })
   } catch (error) {
     console.error("Error setting up media devices:", error)
+    addLog(`Error de acceso al micrófono: ${error.message}`)
     throw error
   }
 }
@@ -222,16 +263,21 @@ async function setupConnection() {
 function setupPeerEventListeners() {
   // Handle incoming connections
   peer.on("connection", (conn) => {
+    addLog(`Conexión entrante de: ${conn.peer}`)
     handleConnection(conn)
   })
 
   // Handle incoming calls
   peer.on("call", (call) => {
+    addLog(`Llamada entrante de: ${call.peer}`)
+
     // Answer the call with our local stream
     call.answer(localStream)
 
     // Handle the incoming audio stream
     call.on("stream", (remoteStream) => {
+      addLog(`Recibiendo audio de: ${call.peer}`)
+
       // Create an audio element to play the remote stream
       const audio = new Audio()
       audio.srcObject = remoteStream
@@ -242,27 +288,112 @@ function setupPeerEventListeners() {
         connections[call.peer].audio = audio
       }
     })
+
+    call.on("error", (err) => {
+      addLog(`Error en llamada: ${err}`)
+    })
+
+    // Store the call
+    if (connections[call.peer]) {
+      connections[call.peer].call = call
+    } else {
+      // If we don't have a data connection yet, create a placeholder
+      connections[call.peer] = {
+        call: call,
+        username: "Usuario desconocido",
+        isTalking: false,
+      }
+
+      // Initiate a data connection back
+      connectToPeer(call.peer)
+    }
   })
+
+  peer.on("disconnected", () => {
+    addLog("Desconectado del servidor. Intentando reconectar...")
+    peer.reconnect()
+  })
+
+  peer.on("close", () => {
+    addLog("Conexión cerrada")
+  })
+}
+
+// Join a room
+// function joinRoom(roomId) {
+//   // In a real app, you would use a signaling server to discover peers in the room
+//   // For this demo, we'll use a simple approach with PeerJS's random IDs
+
+//   // Connect to any existing peers in the room
+//   // This would normally be handled by a signaling server
+//   // For demo purposes, we'll just update the UI
+//   updateParticipantsList()
+// }
+
+// Connect to a specific peer
+function connectToPeer(peerId) {
+  if (connections[peerId] && connections[peerId].conn) {
+    addLog(`Ya estás conectado con: ${peerId}`)
+    return
+  }
+
+  addLog(`Conectando con: ${peerId}`)
+
+  // Create a data connection
+  const conn = peer.connect(peerId, {
+    reliable: true,
+  })
+
+  handleConnection(conn)
+
+  // Also create a media connection (call)
+  if (localStream) {
+    const call = peer.call(peerId, localStream)
+
+    call.on("stream", (remoteStream) => {
+      addLog(`Recibiendo audio de: ${peerId}`)
+
+      // Create an audio element to play the remote stream
+      const audio = new Audio()
+      audio.srcObject = remoteStream
+      audio.autoplay = true
+
+      // Store the audio element with the connection
+      if (connections[peerId]) {
+        connections[peerId].audio = audio
+      }
+    })
+
+    call.on("error", (err) => {
+      addLog(`Error en llamada: ${err}`)
+    })
+
+    // Store the call
+    if (connections[peerId]) {
+      connections[peerId].call = call
+    }
+  }
 }
 
 // Handle a new data connection
 function handleConnection(conn) {
   // Store the connection
-  connections[conn.peer] = {
-    conn: conn,
-    username: "Usuario",
-    isTalking: false,
-  }
+  connections[conn.peer] = connections[conn.peer] || {}
+  connections[conn.peer].conn = conn
+  connections[conn.peer].username = connections[conn.peer].username || "Usuario"
+  connections[conn.peer].isTalking = connections[conn.peer].isTalking || false
 
   // Set up connection event listeners
   conn.on("open", () => {
-    console.log("Connection established with peer:", conn.peer)
+    addLog(`Conexión establecida con: ${conn.peer}`)
 
     // Send our username to the new peer
     conn.send({
       type: "username",
       username: username,
     })
+
+    updateParticipantsList()
   })
 
   conn.on("data", (data) => {
@@ -270,38 +401,36 @@ function handleConnection(conn) {
   })
 
   conn.on("close", () => {
-    console.log("Connection closed with peer:", conn.peer)
+    addLog(`Conexión cerrada con: ${conn.peer}`)
     delete connections[conn.peer]
     updateParticipantsList()
   })
-}
 
-// Join a room
-function joinRoom(roomId) {
-  // In a real app, you would use a signaling server to discover peers in the room
-  // For this demo, we'll use a simple approach with PeerJS's random IDs
-
-  // Connect to any existing peers in the room
-  // This would normally be handled by a signaling server
-  // For demo purposes, we'll just update the UI
-  updateParticipantsList()
+  conn.on("error", (err) => {
+    addLog(`Error en conexión con ${conn.peer}: ${err}`)
+  })
 }
 
 // Start broadcasting audio to all peers
 function startAudioBroadcast() {
   Object.keys(connections).forEach((peerId) => {
     // Call the peer if we haven't already
-    if (!connections[peerId].call) {
+    if (!connections[peerId].call && localStream) {
+      addLog(`Iniciando llamada con: ${peerId}`)
       const call = peer.call(peerId, localStream)
       connections[peerId].call = call
+
+      call.on("error", (err) => {
+        addLog(`Error en llamada a ${peerId}: ${err}`)
+      })
     }
   })
 }
 
 // Stop broadcasting audio
 function stopAudioBroadcast() {
-  // In a real implementation, you would stop the tracks or mute the audio
-  // For this demo, we'll just update the UI
+  // In WebRTC, we can't easily stop the audio stream without closing the connection
+  // The talking-stop message will let peers know to ignore the audio
 }
 
 // Broadcast a message to all connected peers
@@ -321,6 +450,7 @@ function handlePeerMessage(peerId, data) {
   switch (data.type) {
     case "username":
       connections[peerId].username = data.username
+      addLog(`${peerId} se identifica como: ${data.username}`)
       updateParticipantsList()
       break
 
@@ -338,6 +468,8 @@ function handlePeerMessage(peerId, data) {
         staticAudio.currentTime = 0
         staticAudio.play()
       }, 300)
+
+      addLog(`${data.username} está hablando...`)
       break
 
     case "talking-stop":
@@ -352,10 +484,13 @@ function handlePeerMessage(peerId, data) {
       // Play end tone
       endToneAudio.currentTime = 0
       endToneAudio.play()
+
+      addLog(`${data.username} terminó de hablar`)
       break
 
     case "name-change":
       connections[peerId].username = data.newName
+      addLog(`${data.oldName} cambió su nombre a ${data.newName}`)
       updateParticipantsList()
       break
   }
@@ -375,10 +510,10 @@ function updateParticipantsList() {
 
   // Add connected peers
   Object.keys(connections).forEach((peerId) => {
-    const peer = connections[peerId]
+    const peerData = connections[peerId]
     const li = document.createElement("li")
-    li.textContent = peer.username
-    if (peer.isTalking) {
+    li.textContent = peerData.username
+    if (peerData.isTalking) {
       li.classList.add("talking")
     }
     participantsList.appendChild(li)
@@ -399,6 +534,12 @@ function disconnectCall() {
     if (connection && connection.open) {
       connection.close()
     }
+
+    // Stop any audio elements
+    if (connections[peerId].audio) {
+      connections[peerId].audio.srcObject = null
+      connections[peerId].audio.pause()
+    }
   })
   connections = {}
 
@@ -411,6 +552,8 @@ function disconnectCall() {
   // Make sure all audio is stopped
   staticAudio.pause()
   staticAudio.currentTime = 0
+
+  addLog("Desconectado de todos los pares")
 }
 
 // Generate a random ID
@@ -422,19 +565,13 @@ function generateRandomId() {
 function init() {
   statusEl.textContent = "Desconectado"
   statusEl.className = "status disconnected"
+  connectionState.textContent = "Desconectado"
 
-  // Load saved username and room
+  // Load saved username
   const savedUsername = localStorage.getItem("walkie-talkie-username")
   if (savedUsername) {
     username = savedUsername
     usernameInput.value = username
-  }
-
-  const savedRoom = localStorage.getItem("walkie-talkie-room")
-  if (savedRoom) {
-    roomId = savedRoom
-    roomIdInput.value = roomId
-    channelDisplay.textContent = `Canal: ${roomId}`
   }
 
   // Set initial volume
@@ -453,6 +590,9 @@ function init() {
     alert("Tu navegador no soporta las funciones de audio necesarias para esta aplicación.")
     connectBtn.disabled = true
     talkBtn.disabled = true
+    addLog("ERROR: Tu navegador no es compatible con esta aplicación")
+  } else {
+    addLog("Aplicación inicializada. Haz clic en 'Conectar' para comenzar.")
   }
 }
 

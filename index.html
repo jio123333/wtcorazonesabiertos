@@ -25,9 +25,13 @@
         <label for="room-id">ID de Sala:</label>
         <div class="edit-field">
           <input type="text" id="room-id" value="corazones-abiertos" maxlength="20">
-          <button id="join-room" class="edit-btn">Unirse</button>
         </div>
       </div>
+    </div>
+
+    <div class="connection-status">
+      <div id="my-id-display">Tu ID: <span id="my-id">No conectado</span></div>
+      <div id="connection-info">Estado: <span id="connection-state">Desconectado</span></div>
     </div>
 
     <div class="walkie-talkie">
@@ -54,6 +58,19 @@
       <ul id="participants-list">
         <!-- Participants will be added here dynamically -->
       </ul>
+    </div>
+
+    <div class="connect-peer">
+      <h3>Conectar con otro dispositivo</h3>
+      <div class="edit-field">
+        <input type="text" id="peer-id" placeholder="Ingresa el ID del otro dispositivo">
+        <button id="connect-to-peer" class="edit-btn">Conectar</button>
+      </div>
+    </div>
+
+    <div class="debug-log">
+      <h3>Registro de conexión</h3>
+      <div id="log-container" class="log-container"></div>
     </div>
   </div>
 
