@@ -2,8 +2,14 @@
 const connectBtn = document.getElementById("connect-btn")
 const talkBtn = document.getElementById("talk-btn")
 const statusEl = document.getElementById("status")
+const channelDisplay = document.getElementById("channel-display")
+const activeUserEl = document.getElementById("active-user")
 const volumeControl = document.getElementById("volume")
 const participantsList = document.getElementById("participants-list")
+const usernameInput = document.getElementById("username")
+const editUsernameBtn = document.getElementById("edit-username")
+const roomIdInput = document.getElementById("room-id")
+const joinRoomBtn = document.getElementById("join-room")
 
 // Audio elements for radio sound effects
 const startToneAudio = new Audio()
@@ -16,16 +22,14 @@ const staticAudio = new Audio()
 staticAudio.src = "https://cdn.freesound.org/previews/234/234988_4568611-lq.mp3" // Radio static noise
 staticAudio.loop = true
 
-// Variables for audio streaming
+// Variables for WebRTC
+let peer = null
+let connections = {}
+let localStream = null
+let username = "Usuario"
+let roomId = "corazones-abiertos"
 let isConnected = false
 let isTalking = false
-let localStream = null
-let peerConnections = {}
-const roomId = "corazones-abiertos-channel"
-const userId = generateUserId()
-let mediaRecorder = null
-let audioContext = null
-let audioDestination = null
 
 // Set initial volume
 volumeControl.addEventListener("input", () => {
@@ -33,6 +37,50 @@ volumeControl.addEventListener("input", () => {
   startToneAudio.volume = volume
   endToneAudio.volume = volume
   staticAudio.volume = volume * 0.3 // Lower volume for static
+})
+
+// Username editing
+editUsernameBtn.addEventListener("click", () => {
+  const newUsername = usernameInput.value.trim()
+  if (newUsername && newUsername !== username) {
+    username = newUsername
+    localStorage.setItem("walkie-talkie-username", username)
+
+    // Update UI
+    updateParticipantsList()
+
+    // Notify other peers about name change
+    if (isConnected) {
+      broadcastMessage({
+        type: "name-change",
+        oldName: username,
+        newName: newUsername,
+      })
+    }
+
+    alert(`Nombre cambiado a: ${username}`)
+  }
+})
+
+// Room joining
+joinRoomBtn.addEventListener("click", () => {
+  const newRoomId = roomIdInput.value.trim()
+  if (newRoomId && newRoomId !== roomId) {
+    // If already connected, disconnect first
+    if (isConnected) {
+      disconnectCall()
+      isConnected = false
+      connectBtn.textContent = "Conectar"
+      statusEl.textContent = "Desconectado"
+      statusEl.className = "status disconnected"
+    }
+
+    roomId = newRoomId
+    localStorage.setItem("walkie-talkie-room", roomId)
+    channelDisplay.textContent = `Canal: ${roomId}`
+
+    alert(`Te has unido al canal: ${roomId}`)
+  }
 })
 
 // Connect button event
@@ -44,15 +92,10 @@ connectBtn.addEventListener("click", async () => {
       connectBtn.textContent = "Desconectar"
       statusEl.textContent = "Conectado"
       statusEl.className = "status connected"
+      talkBtn.disabled = false
 
       // Add self to participants list
-      addParticipant("Tú (Local)")
-
-      // Simulate other participants for demo
-      setTimeout(() => {
-        addParticipant("Voluntario 1")
-        addParticipant("Voluntario 2")
-      }, 1500)
+      updateParticipantsList()
     } catch (error) {
       console.error("Error connecting:", error)
       statusEl.textContent = "Error al conectar"
@@ -64,9 +107,11 @@ connectBtn.addEventListener("click", async () => {
     connectBtn.textContent = "Conectar"
     statusEl.textContent = "Desconectado"
     statusEl.className = "status disconnected"
+    talkBtn.disabled = true
 
     // Clear participants list
     participantsList.innerHTML = ""
+    activeUserEl.textContent = ""
   }
 })
 
@@ -80,7 +125,7 @@ talkBtn.addEventListener("mouseleave", stopTalking)
 // Start talking function
 function startTalking(e) {
   e.preventDefault()
-  if (!isConnected) return
+  if (!isConnected || isTalking) return
 
   isTalking = true
   talkBtn.classList.add("active")
@@ -97,10 +142,14 @@ function startTalking(e) {
     }
   }, 300) // Small delay after the beep
 
-  // Start broadcasting audio if connected
-  if (mediaRecorder && mediaRecorder.state === "inactive") {
-    mediaRecorder.start(100)
-  }
+  // Broadcast that we're talking
+  broadcastMessage({
+    type: "talking-start",
+    username: username,
+  })
+
+  // Start sending audio to all peers
+  startAudioBroadcast()
 }
 
 // Stop talking function
@@ -119,10 +168,14 @@ function stopTalking(e) {
   endToneAudio.currentTime = 0
   endToneAudio.play()
 
-  // Stop broadcasting audio
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop()
-  }
+  // Broadcast that we've stopped talking
+  broadcastMessage({
+    type: "talking-stop",
+    username: username,
+  })
+
+  // Stop sending audio
+  stopAudioBroadcast()
 }
 
 // Setup WebRTC connection
@@ -137,112 +190,252 @@ async function setupConnection() {
       video: false,
     })
 
-    // Setup audio context for processing
-    audioContext = new (window.AudioContext || window.webkitAudioContext)()
-    audioDestination = audioContext.createMediaStreamDestination()
+    // Initialize PeerJS
+    const peerId = `${roomId}-${generateRandomId()}`
+    peer = new Peer(peerId)
 
-    // Create media recorder
-    mediaRecorder = new MediaRecorder(localStream)
+    return new Promise((resolve, reject) => {
+      peer.on("open", (id) => {
+        console.log("My peer ID is: " + id)
 
-    // Handle data available event
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        // In a real app, this would send the audio data to peers
-        console.log("Audio data available:", event.data.size, "bytes")
+        // Set up event listeners for peer connections
+        setupPeerEventListeners()
 
-        // Simulate receiving a response after talking (for demo purposes)
-        if (!isTalking && Math.random() > 0.7) {
-          setTimeout(() => {
-            simulateIncomingTransmission()
-          }, 2000)
-        }
-      }
-    }
+        // Join the room
+        joinRoom(roomId)
 
-    return true
+        resolve()
+      })
+
+      peer.on("error", (err) => {
+        console.error("Peer connection error:", err)
+        reject(err)
+      })
+    })
   } catch (error) {
     console.error("Error setting up media devices:", error)
     throw error
   }
 }
 
-// Simulate incoming transmission (for demo purposes)
-function simulateIncomingTransmission() {
-  if (!isConnected) return
+// Set up peer event listeners
+function setupPeerEventListeners() {
+  // Handle incoming connections
+  peer.on("connection", (conn) => {
+    handleConnection(conn)
+  })
 
-  // Play incoming transmission sounds
-  startToneAudio.currentTime = 0
-  startToneAudio.play()
+  // Handle incoming calls
+  peer.on("call", (call) => {
+    // Answer the call with our local stream
+    call.answer(localStream)
 
-  // Show who's talking
-  const sender = Math.random() > 0.5 ? "Voluntario 1" : "Voluntario 2"
-  const tempStatus = statusEl.textContent
-  statusEl.textContent = `${sender} está hablando...`
+    // Handle the incoming audio stream
+    call.on("stream", (remoteStream) => {
+      // Create an audio element to play the remote stream
+      const audio = new Audio()
+      audio.srcObject = remoteStream
+      audio.autoplay = true
 
-  // Play static for a moment
-  setTimeout(() => {
-    staticAudio.currentTime = 0
-    staticAudio.play()
-  }, 300)
+      // Store the audio element with the connection
+      if (connections[call.peer]) {
+        connections[call.peer].audio = audio
+      }
+    })
+  })
+}
 
-  // End the transmission after a random time
-  const duration = 1500 + Math.random() * 2000
-  setTimeout(() => {
-    staticAudio.pause()
-    staticAudio.currentTime = 0
+// Handle a new data connection
+function handleConnection(conn) {
+  // Store the connection
+  connections[conn.peer] = {
+    conn: conn,
+    username: "Usuario",
+    isTalking: false,
+  }
 
-    endToneAudio.currentTime = 0
-    endToneAudio.play()
+  // Set up connection event listeners
+  conn.on("open", () => {
+    console.log("Connection established with peer:", conn.peer)
 
-    // Restore status
-    setTimeout(() => {
-      statusEl.textContent = tempStatus
-    }, 500)
-  }, duration)
+    // Send our username to the new peer
+    conn.send({
+      type: "username",
+      username: username,
+    })
+  })
+
+  conn.on("data", (data) => {
+    handlePeerMessage(conn.peer, data)
+  })
+
+  conn.on("close", () => {
+    console.log("Connection closed with peer:", conn.peer)
+    delete connections[conn.peer]
+    updateParticipantsList()
+  })
+}
+
+// Join a room
+function joinRoom(roomId) {
+  // In a real app, you would use a signaling server to discover peers in the room
+  // For this demo, we'll use a simple approach with PeerJS's random IDs
+
+  // Connect to any existing peers in the room
+  // This would normally be handled by a signaling server
+  // For demo purposes, we'll just update the UI
+  updateParticipantsList()
+}
+
+// Start broadcasting audio to all peers
+function startAudioBroadcast() {
+  Object.keys(connections).forEach((peerId) => {
+    // Call the peer if we haven't already
+    if (!connections[peerId].call) {
+      const call = peer.call(peerId, localStream)
+      connections[peerId].call = call
+    }
+  })
+}
+
+// Stop broadcasting audio
+function stopAudioBroadcast() {
+  // In a real implementation, you would stop the tracks or mute the audio
+  // For this demo, we'll just update the UI
+}
+
+// Broadcast a message to all connected peers
+function broadcastMessage(message) {
+  Object.keys(connections).forEach((peerId) => {
+    const connection = connections[peerId].conn
+    if (connection && connection.open) {
+      connection.send(message)
+    }
+  })
+}
+
+// Handle messages from peers
+function handlePeerMessage(peerId, data) {
+  if (!connections[peerId]) return
+
+  switch (data.type) {
+    case "username":
+      connections[peerId].username = data.username
+      updateParticipantsList()
+      break
+
+    case "talking-start":
+      connections[peerId].isTalking = true
+      activeUserEl.textContent = `${data.username} está hablando...`
+      updateParticipantsList()
+
+      // Play start tone
+      startToneAudio.currentTime = 0
+      startToneAudio.play()
+
+      // Play static
+      setTimeout(() => {
+        staticAudio.currentTime = 0
+        staticAudio.play()
+      }, 300)
+      break
+
+    case "talking-stop":
+      connections[peerId].isTalking = false
+      activeUserEl.textContent = ""
+      updateParticipantsList()
+
+      // Stop static
+      staticAudio.pause()
+      staticAudio.currentTime = 0
+
+      // Play end tone
+      endToneAudio.currentTime = 0
+      endToneAudio.play()
+      break
+
+    case "name-change":
+      connections[peerId].username = data.newName
+      updateParticipantsList()
+      break
+  }
+}
+
+// Update the participants list in the UI
+function updateParticipantsList() {
+  participantsList.innerHTML = ""
+
+  // Add self
+  const selfLi = document.createElement("li")
+  selfLi.textContent = `${username} (Tú)`
+  if (isTalking) {
+    selfLi.classList.add("talking")
+  }
+  participantsList.appendChild(selfLi)
+
+  // Add connected peers
+  Object.keys(connections).forEach((peerId) => {
+    const peer = connections[peerId]
+    const li = document.createElement("li")
+    li.textContent = peer.username
+    if (peer.isTalking) {
+      li.classList.add("talking")
+    }
+    participantsList.appendChild(li)
+  })
 }
 
 // Disconnect call
 function disconnectCall() {
+  // Close all peer connections
+  if (peer) {
+    peer.destroy()
+    peer = null
+  }
+
+  // Close all connections
+  Object.keys(connections).forEach((peerId) => {
+    const connection = connections[peerId].conn
+    if (connection && connection.open) {
+      connection.close()
+    }
+  })
+  connections = {}
+
+  // Stop local stream
   if (localStream) {
     localStream.getTracks().forEach((track) => track.stop())
     localStream = null
   }
 
-  if (mediaRecorder) {
-    if (mediaRecorder.state === "recording") {
-      mediaRecorder.stop()
-    }
-    mediaRecorder = null
-  }
-
-  if (audioContext) {
-    audioContext.close()
-    audioContext = null
-  }
-
   // Make sure all audio is stopped
   staticAudio.pause()
   staticAudio.currentTime = 0
-
-  peerConnections = {}
 }
 
-// Add participant to the list
-function addParticipant(name) {
-  const li = document.createElement("li")
-  li.textContent = name
-  participantsList.appendChild(li)
-}
-
-// Generate a random user ID
-function generateUserId() {
-  return "user_" + Math.random().toString(36).substr(2, 9)
+// Generate a random ID
+function generateRandomId() {
+  return Math.random().toString(36).substr(2, 9)
 }
 
 // Initialize the app
 function init() {
   statusEl.textContent = "Desconectado"
   statusEl.className = "status disconnected"
+
+  // Load saved username and room
+  const savedUsername = localStorage.getItem("walkie-talkie-username")
+  if (savedUsername) {
+    username = savedUsername
+    usernameInput.value = username
+  }
+
+  const savedRoom = localStorage.getItem("walkie-talkie-room")
+  if (savedRoom) {
+    roomId = savedRoom
+    roomIdInput.value = roomId
+    channelDisplay.textContent = `Canal: ${roomId}`
+  }
 
   // Set initial volume
   volumeControl.value = 0.7

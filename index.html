@@ -13,15 +13,33 @@
       <p>Comunicación para servir a los necesitados</p>
     </header>
 
+    <div class="user-profile">
+      <div class="profile-field">
+        <label for="username">Tu nombre:</label>
+        <div class="edit-field">
+          <input type="text" id="username" value="Usuario" maxlength="20">
+          <button id="edit-username" class="edit-btn">Guardar</button>
+        </div>
+      </div>
+      <div class="profile-field">
+        <label for="room-id">ID de Sala:</label>
+        <div class="edit-field">
+          <input type="text" id="room-id" value="corazones-abiertos" maxlength="20">
+          <button id="join-room" class="edit-btn">Unirse</button>
+        </div>
+      </div>
+    </div>
+
     <div class="walkie-talkie">
       <div class="screen">
         <div class="status" id="status">Desconectado</div>
-        <div class="channel">Canal: Ayuda Comunitaria</div>
+        <div class="channel" id="channel-display">Canal: Ayuda Comunitaria</div>
+        <div class="active-user" id="active-user"></div>
       </div>
       
       <div class="controls">
         <button id="connect-btn" class="btn">Conectar</button>
-        <button id="talk-btn" class="btn talk-btn">
+        <button id="talk-btn" class="btn talk-btn" disabled>
           <span>Presiona para Hablar</span>
         </button>
         <div class="volume-control">
@@ -32,13 +50,15 @@
     </div>
 
     <div class="participants" id="participants">
-      <h2>Participantes</h2>
+      <h2>Participantes Conectados</h2>
       <ul id="participants-list">
         <!-- Participants will be added here dynamically -->
       </ul>
     </div>
   </div>
 
+  <!-- PeerJS library for WebRTC -->
+  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
