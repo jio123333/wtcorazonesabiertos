@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corazones Abiertos - Walkie-Talkie</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Corazones Abiertos</h1>
+      <p>Comunicación para servir a los necesitados</p>
+    </header>
+
+    <div class="walkie-talkie">
+      <div class="screen">
+        <div class="status" id="status">Desconectado</div>
+        <div class="channel">Canal: Ayuda Comunitaria</div>
+      </div>
+      
+      <div class="controls">
+        <button id="connect-btn" class="btn">Conectar</button>
+        <button id="talk-btn" class="btn talk-btn">
+          <span>Presiona para Hablar</span>
+        </button>
+        <div class="volume-control">
+          <label for="volume">Volumen:</label>
+          <input type="range" id="volume" min="0" max="1" step="0.1" value="0.7">
+        </div>
+      </div>
+    </div>
+
+    <div class="participants" id="participants">
+      <h2>Participantes</h2>
+      <ul id="participants-list">
+        <!-- Participants will be added here dynamically -->
+      </ul>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
