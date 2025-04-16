@@ -142,11 +142,6 @@ header p {
   color: #e74c3c;
 }
 
-.channel {
-  font-size: 0.9rem;
-  margin-bottom: 5px;
-}
-
 .active-user {
   font-size: 1rem;
   color: #f39c12;
@@ -309,6 +304,7 @@ header p {
   font-size: 0.8rem;
   height: 100px;
   overflow-y: auto;
+  margin-bottom: 10px;
 }
 
 @media (max-width: 480px) {
