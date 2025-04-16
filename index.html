@@ -1,24 +1,66 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Corazones Abiertos - Walkie Talkie</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Walkie Talkie Digital</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Corazones Abiertos</h1>
-    <input type="text" id="username" placeholder="Tu nombre" />
-    <button id="updateName">Actualizar Nombre</button>
-
-    <div class="radio-box">
-      <button id="talkButton">🎙️ Presiona para hablar</button>
-      <audio id="radioSound" src="radio-beep.mp3" preload="auto"></audio>
+    <div class="container">
+        <div class="walkie-talkie">
+            <div class="top-section">
+                <div class="antenna"></div>
+                <div class="channel-knob">
+                    <div class="knob-indicator"></div>
+                </div>
+            </div>
+            <div class="screen">
+                <div class="display">
+                    <div class="channel-display">Canal: <span id="current-channel">1</span></div>
+                    <div class="status" id="status">Desconectado</div>
+                    <div class="users-list" id="users-list"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <div class="username-section">
+                    <input type="text" id="username" placeholder="Tu nombre" maxlength="15">
+                    <button id="set-username">Guardar</button>
+                </div>
+                <div class="channel-selector">
+                    <button id="channel-down">-</button>
+                    <span>Canal</span>
+                    <button id="channel-up">+</button>
+                </div>
+                <div class="volume-control">
+                    <button id="volume-down">-</button>
+                    <span>Volumen</span>
+                    <button id="volume-up">+</button>
+                </div>
+                <button id="connect-btn" class="connect-btn">Conectar</button>
+                <button id="talk-btn" class="talk-btn" disabled>
+                    PRESIONA PARA HABLAR
+                </button>
+            </div>
+            <div class="speaker">
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+                <div class="speaker-hole"></div>
+            </div>
+            <div class="led" id="led"></div>
+        </div>
     </div>
 
-    <p id="status">Conectando...</p>
-  </div>
+    <audio id="receive-audio" autoplay></audio>
+    <audio id="connect-sound" src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3"></audio>
+    <audio id="beep-sound" src="https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3"></audio>
 
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
